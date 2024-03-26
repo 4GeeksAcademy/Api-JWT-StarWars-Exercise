@@ -9,6 +9,8 @@ from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
 from models import db, Users, People, Planets, Starships, Favorites
+
+from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
 #from models import Person
 
 app = Flask(__name__)
@@ -26,6 +28,11 @@ db.init_app(app)
 CORS(app)
 setup_admin(app)
 
+
+# Setup the Flask-JWT-Extended extension
+app.config["JWT_SECRET_KEY"] = "secret-bpn"  # Change this!
+jwt = JWTManager(app)
+
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
@@ -35,6 +42,87 @@ def handle_invalid_usage(error):
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
+
+
+
+# Create a route to authenticate your users and return JWTs. The
+# create_access_token() function is used to actually generate the JWT.
+
+@app.route("/login", methods=["POST"])
+def login():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+
+    query_result = Users.query.filter_by(email=email).first()
+
+    if query_result is None:
+        return jsonify({"msg": "Bad request"}), 401
+    
+
+    if email != query_result.email or password != query_result.password:
+        return jsonify({"msg": "Bad request"}), 401
+
+    access_token = create_access_token(identity=email)
+    return jsonify(access_token=access_token)
+
+
+
+# Protect a route with jwt_required, which will kick out requests
+# # without a valid JWT present.
+
+@app.route('/users/favorites/', methods=['GET'])
+@jwt_required()
+def get_user_favorites_protected():
+    current_user = get_jwt_identity()
+    current_user_data = Users.query.filter_by(email=current_user).first()
+
+    query_result = Favorites.query.filter_by(users_id=current_user_data.serialize()['id']).all()
+    print(current_user_data.serialize())
+    print(query_result)
+
+    if len(query_result) == 0:
+
+        return jsonify({"msg": "There aren't any favorites yet"}), 404
+    
+    elif query_result:
+            # results = [favorite.serialize() for favorite in query_results]
+            results = list(map(lambda item: item.serialize(),query_result))
+    
+            print(results)
+            return jsonify({"msg": "Ok", "results": results}), 200
+    
+    else: 
+        return jsonify({"msg": "There aren't any favorites yet"}), 404
+  
+    
+## Sign Up User
+
+@app.route("/signup", methods=["POST"])
+def signup():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+    name= request.json.get("name", None)
+
+    query_result = Users.query.filter_by(email=email).first()
+  
+
+   
+    if query_result is None:
+
+        new_user = Users(email=email, password=password, name=name)
+        db.session.add(new_user)
+        db.session.commit()
+
+        return jsonify({"msg": "New user created"}), 200
+    
+    
+    
+    else :
+        return jsonify({"msg": "User exist, try recover your password"}), 200
+    
+        
+
+
 
 # PEOPLE
 
