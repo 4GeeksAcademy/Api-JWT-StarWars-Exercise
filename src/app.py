@@ -123,7 +123,6 @@ def signup():
         
 
 
-
 # PEOPLE
 
 @app.route('/people', methods=['GET'])
@@ -517,6 +516,19 @@ def update_people(people_id):
 
     # elif people_exist is None:
     #     return ({"msg": "This character doesn't exist"}), 400   
+
+
+
+
+# Validate Token
+@app.route("/valid-token", methods=["GET"])
+@jwt_required()
+def valid_token():
+    current_user = get_jwt_identity()
+    query_result = Users.query.filter_by(email=current_user).first()
+    if query_result is None:
+        return jsonify({"msg": "user doesn't exist", "is_logged":False}),404
+    return jsonify({"is_logged":True}),200
 
 
 
